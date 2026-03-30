@@ -18,13 +18,43 @@ function getClient(): OpenAI {
 function platformInstructions(platform: PlatformId): string {
   switch (platform) {
     case "twitter":
-      return `X (Twitter): Write a thread (numbered 1/, 2/, …). Each tweet under 280 characters. No hashtags unless essential. Engaging hooks.`;
+      return `X (Twitter):
+    - Convert into a THREAD using "1/", "2/", etc.
+    - Each tweet MUST be under 280 characters.
+    - Prioritize clarity and punchiness (short sentences perform best).
+    - First tweet MUST be a strong hook that creates curiosity.
+    - Avoid fluff, filler, or long explanations.
+    - No hashtags unless absolutely necessary.
+    - Each tweet should feel complete and skimmable.`;
+
     case "linkedin":
-      return `LinkedIn: Professional short post (3–6 short paragraphs). Line breaks between paragraphs. Optional 3–5 relevant hashtags at end.`;
+      return `LinkedIn:
+    - Write 3-6 concise paragraphs.
+    - First 1-2 lines MUST act as a hook (only ~200 characters are visible before truncation).
+    - Use a professional but human tone.
+    - Prioritize storytelling, insights, or lessons.
+    - Each paragraph should be short (1-3 sentences).
+    - Add spacing for readability.
+    - Optionally include 3-5 relevant hashtags at the end.`;
+
     case "newsletter":
-      return `Newsletter teaser: 2–4 sentences + optional subject line on first line as "Subject: ...". Enticing, not clickbait.`;
+      return `Newsletter teaser:
+    - Write 2-4 compelling sentences.
+    - Focus on curiosity, value, and clarity.
+    - Avoid clickbait; build genuine intrigue.
+    - Optionally include a subject line as the FIRST line:
+      "Subject: ..."
+    - Make the reader want to open or click.`;
+
     case "instagram":
-      return `Instagram caption: First line hook, then body with line breaks; optional 3–8 hashtags at end. Conversational.`;
+      return `Instagram caption:
+    - First line MUST be a strong hook (only ~125 characters are visible initially).
+    - Use short paragraphs with line breaks for readability.
+    - Tone should be conversational and relatable.
+    - Encourage engagement subtly (emotion, relatability, insight).
+    - Avoid large text blocks.
+    - Add 3-8 relevant hashtags at the end (optional, not spammy).`;
+
     default:
       return "";
   }
@@ -34,21 +64,50 @@ function buildSystemPrompt(
   platforms: PlatformId[],
   extraInstructions?: string,
 ): string {
-  const lines = platforms.map((p) => `- "${p}": ${platformInstructions(p)}`);
+  const platformDetails = platforms
+    .map((p) => `- "${p}":\n${platformInstructions(p)}`)
+    .join("\n\n");
+
   const extra = extraInstructions?.trim()
-    ? `\nGlobal instructions from user: ${extraInstructions.trim()}`
+    ? `\n\nAdditional global instructions:\n${extraInstructions.trim()}`
     : "";
-  return `You are an editor who turns long-form transcripts into platform-specific text posts.
-${extra}
-Rules:
-- Output ONLY valid JSON with keys exactly: ${JSON.stringify(platforms)}.
-- Each value is a single string (the full post for that platform). Use \\n for line breaks inside strings.
-- Do not invent facts not in the transcript; you may compress and rephrase.
-- Do not include markdown code fences or any text outside JSON.`;
+
+  return `You are an expert content editor specializing in adapting long-form transcripts into high-performing platform-specific posts.
+
+    Your goal is NOT to summarize blindly, but to:
+    - Extract key ideas
+    - Adapt tone, structure, and format per platform
+    - Optimize for readability and engagement
+
+    Platforms:
+    ${platformDetails}
+    ${extra}
+
+    STRICT OUTPUT RULES:
+    1. Output MUST be valid JSON.
+    2. Use ONLY these keys: ${JSON.stringify(platforms)}.
+    3. Each value MUST be a single string.
+    4. Use "\\n" for line breaks inside strings.
+    5. Do NOT include markdown, explanations, or code fences.
+    6. Do NOT include any text before or after the JSON.
+    7. Do NOT hallucinate or invent facts.
+    8. Ensure content is native to each platform (NOT copy-pasted across).
+    9. Ensure hooks are optimized for truncation behavior on each platform.
+    10. Output must be directly parsable by JSON.parse().`;
 }
 
 function buildUserPrompt(transcript: string): string {
-  return `Transcript:\n\n${transcript}`;
+  return `Transform the following transcript into platform-specific posts.
+
+  Guidelines:
+  - Focus on the most valuable and engaging ideas.
+  - Remove filler, repetition, and irrelevant details.
+  - Adapt tone and structure per platform.
+
+  Transcript:
+  """
+  ${transcript.trim()}
+  """`;
 }
 
 function extractJsonObject(text: string): Record<string, string> {
