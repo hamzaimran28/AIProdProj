@@ -4,6 +4,8 @@ import {
   setTranscript,
   setExtraInstructions,
 } from "@/store/slices/transcriptSlice";
+import { IconTranscript } from "@/ui/icons";
+import { StepBadge } from "@/ui/StepBadge";
 
 const MIN_LEN = 100;
 const MAX_LEN = 120_000;
@@ -39,13 +41,20 @@ export function TranscriptInput() {
 
   return (
     <section className="panel">
-      <h2>1. Transcript</h2>
-      <p className="hint">
-        Paste your transcript or load a .txt / .md file ({MIN_LEN}–{MAX_LEN.toLocaleString()}{" "}
-        characters).
-      </p>
+      <div className="panel-head">
+        <StepBadge>
+          <IconTranscript className="panel-step-icon" />
+        </StepBadge>
+        <div className="panel-head-text">
+          <h2>Transcript</h2>
+          <p className="hint">
+            Paste your transcript or load a .txt / .md file ({MIN_LEN}–
+            {MAX_LEN.toLocaleString()} characters).
+          </p>
+        </div>
+      </div>
       <textarea
-        className="textarea"
+        className="textarea textarea-field"
         rows={12}
         placeholder="Paste transcript text…"
         value={text}

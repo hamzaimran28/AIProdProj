@@ -1,6 +1,8 @@
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { togglePlatform } from "@/store/slices/platformSlice";
 import { PLATFORM_OPTIONS } from "@/shared/constants/platforms";
+import { IconPlatforms } from "@/ui/icons";
+import { StepBadge } from "@/ui/StepBadge";
 
 export function PlatformSelect() {
   const dispatch = useAppDispatch();
@@ -8,8 +10,22 @@ export function PlatformSelect() {
 
   return (
     <section className="panel">
-      <h2>2. Platforms</h2>
-      <p className="hint">Choose 1–4 platforms (text-only drafts).</p>
+      <div className="panel-head">
+        <StepBadge>
+          <IconPlatforms className="panel-step-icon" />
+        </StepBadge>
+        <div className="panel-head-text">
+          <div className="panel-title-row">
+            <h2>Platforms</h2>
+            {selected.length > 0 && (
+              <span className="pill-count">
+                {selected.length} selected
+              </span>
+            )}
+          </div>
+          <p className="hint">Choose 1–4 platforms (text-only drafts).</p>
+        </div>
+      </div>
       <div className="chips">
         {PLATFORM_OPTIONS.map((p) => {
           const active = selected.includes(p.id);

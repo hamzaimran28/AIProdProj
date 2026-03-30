@@ -1,6 +1,12 @@
 node_modules/
 dist/
+
+# Real secrets — use backend/.env locally (copy from .env.example). Never commit.
 .env
+**/.env
+backend/.env
+frontend/.env
+
 *.log
 .DS_Store
 frontend/dist/

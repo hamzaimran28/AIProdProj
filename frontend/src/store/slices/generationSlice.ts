@@ -79,6 +79,7 @@ export const generationSlice = createSlice({
       .addCase(generatePosts.pending, (state) => {
         state.status = "loading";
         state.error = null;
+        state.posts = null;
       })
       .addCase(generatePosts.fulfilled, (state, action) => {
         state.status = "succeeded";
