@@ -19,13 +19,14 @@ function platformInstructions(platform: PlatformId): string {
   switch (platform) {
     case "twitter":
       return `X (Twitter):
-    - Convert into a THREAD using "1/", "2/", etc.
-    - Each tweet MUST be under 280 characters.
-    - Prioritize clarity and punchiness (short sentences perform best).
-    - First tweet MUST be a strong hook that creates curiosity.
-    - Avoid fluff, filler, or long explanations.
-    - No hashtags unless absolutely necessary.
-    - Each tweet should feel complete and skimmable.`;
+    - Write ONLY ONE tweet (do NOT create a thread).
+    - The tweet MUST be under 280 characters.
+    - Write it as a SINGLE paragraph (no line breaks).
+    - Keep it concise, punchy, and impactful.
+    - Start with a strong hook that creates curiosity.
+    - Focus on one core idea only.
+    - Avoid fluff and unnecessary words.
+    - No hashtags unless absolutely necessary.`;
 
     case "linkedin":
       return `LinkedIn:
