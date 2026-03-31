@@ -1,12 +1,8 @@
-import OpenAI from "openai";
+import OpenAI, { APIError } from "openai";
 import { env, requireGroqKey } from "../config/env.js";
 import type { PlatformId } from "../constants/platforms.js";
 
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-/** Completion cap; model may allow higher — see Groq model `max_tokens` in console */
-const MAX_COMPLETION_TOKENS = 32_768;
-
-const MAX_TRANSCRIPT_CHARS = 40_000;
 
 function getClient(): OpenAI {
   return new OpenAI({
@@ -144,26 +140,41 @@ export async function generatePostsFromTranscript(
 }> {
   let truncated = false;
   let notice: string | undefined;
+  const maxChars = env.groqMaxTranscriptChars;
   let body = transcript;
-  if (body.length > MAX_TRANSCRIPT_CHARS) {
-    body = body.slice(0, MAX_TRANSCRIPT_CHARS);
+  if (body.length > maxChars) {
+    body = body.slice(0, maxChars);
     truncated = true;
-    notice = `Transcript was truncated to ${MAX_TRANSCRIPT_CHARS.toLocaleString()} characters for this request.`;
+    notice = `Transcript was truncated to ${maxChars.toLocaleString()} characters for this request (Groq request size / tier limits).`;
   }
 
   const client = getClient();
-  const completion = await client.chat.completions.create({
-    model: env.groqModel,
-    messages: [
-      {
-        role: "system",
-        content: buildSystemPrompt(platforms, extraInstructions),
-      },
-      { role: "user", content: buildUserPrompt(body) },
-    ],
-    temperature: 0.5,
-    max_tokens: MAX_COMPLETION_TOKENS,
-  });
+  let completion;
+  try {
+    completion = await client.chat.completions.create({
+      model: env.groqModel,
+      messages: [
+        {
+          role: "system",
+          content: buildSystemPrompt(platforms, extraInstructions),
+        },
+        { role: "user", content: buildUserPrompt(body) },
+      ],
+      temperature: 0.5,
+      max_tokens: env.groqMaxCompletionTokens,
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const tooLarge =
+      (e instanceof APIError && e.status === 413) ||
+      /413|too large|TPM|rate limit/i.test(msg);
+    if (tooLarge) {
+      throw new Error(
+        "Request too large for your Groq tier: shorten the transcript, lower GROQ_MAX_COMPLETION_TOKENS / GROQ_MAX_TRANSCRIPT_CHARS in .env, or upgrade your plan at https://console.groq.com/settings/billing",
+      );
+    }
+    throw e;
+  }
 
   const raw = completion.choices[0]?.message?.content;
   if (!raw) {
