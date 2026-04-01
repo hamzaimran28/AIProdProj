@@ -1,6 +1,7 @@
 import OpenAI, { APIError } from "openai";
 import { env, requireGroqKey } from "../config/env.js";
 import type { PlatformId } from "../constants/platforms.js";
+import { summarizeTranscript } from "./openrouter.service.js";
 
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 
@@ -69,12 +70,13 @@ function buildSystemPrompt(
     ? `\n\nAdditional global instructions:\n${extraInstructions.trim()}`
     : "";
 
-  return `You are an expert content editor specializing in adapting long-form transcripts into high-performing platform-specific posts.
+  return `You are an expert content editor specializing in adapting long-form source material into high-performing platform-specific posts.
 
-    Your goal is NOT to summarize blindly, but to:
-    - Extract key ideas
+    The source text has already been summarized from the transcript. Your job is to:
+    - Extract the strongest ideas
     - Adapt tone, structure, and format per platform
     - Optimize for readability and engagement
+    - Stay faithful to the provided source material
 
     Platforms:
     ${platformDetails}
@@ -93,17 +95,17 @@ function buildSystemPrompt(
     10. Output must be directly parsable by JSON.parse().`;
 }
 
-function buildUserPrompt(transcript: string): string {
-  return `Transform the following transcript into platform-specific posts.
+function buildUserPrompt(sourceText: string): string {
+  return `Transform the following source material into platform-specific posts.
 
   Guidelines:
   - Focus on the most valuable and engaging ideas.
   - Remove filler, repetition, and irrelevant details.
   - Adapt tone and structure per platform.
 
-  Transcript:
+  Source material:
   """
-  ${transcript.trim()}
+  ${sourceText.trim()}
   """`;
 }
 
@@ -145,8 +147,10 @@ export async function generatePostsFromTranscript(
   if (body.length > maxChars) {
     body = body.slice(0, maxChars);
     truncated = true;
-    notice = `Transcript was truncated to ${maxChars.toLocaleString()} characters for this request (Groq request size / tier limits).`;
+    notice = `Transcript was truncated to ${maxChars.toLocaleString()} characters before summarization to stay within request limits.`;
   }
+
+  const { summary, model: summaryModel } = await summarizeTranscript(body);
 
   const client = getClient();
   let completion;
@@ -158,7 +162,7 @@ export async function generatePostsFromTranscript(
           role: "system",
           content: buildSystemPrompt(platforms, extraInstructions),
         },
-        { role: "user", content: buildUserPrompt(body) },
+        { role: "user", content: buildUserPrompt(summary) },
       ],
       temperature: 0.5,
       max_tokens: env.groqMaxCompletionTokens,
@@ -198,6 +202,8 @@ export async function generatePostsFromTranscript(
     posts,
     truncated,
     transcriptCharsUsed: body.length,
-    notice,
+    notice: notice
+      ? `${notice} The truncated transcript was summarized with OpenRouter (${summaryModel}) before Groq generated the posts.`
+      : `Transcript was summarized with OpenRouter (${summaryModel}) before Groq generated the posts.`,
   };
 }

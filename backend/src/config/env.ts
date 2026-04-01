@@ -4,13 +4,11 @@ dotenv.config();
 
 const port = Number(process.env.PORT) || 3001;
 
-/** Matches Groq dashboard “custom_models” id (override with GROQ_MODEL). */
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
-
-/** Default completion budget — keep low so prompt + max_tokens fits Groq tier limits (avoid 413 / TPM issues). */
+const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
 const DEFAULT_GROQ_MAX_COMPLETION_TOKENS = 4096;
-/** Default transcript cap before sending to Groq — large inputs + huge max_tokens exceed free-tier request limits. */
 const DEFAULT_GROQ_MAX_TRANSCRIPT_CHARS = 12_000;
+const DEFAULT_OPENROUTER_MAX_COMPLETION_TOKENS = 1200;
 
 function clampInt(
   raw: string | undefined,
@@ -28,19 +26,25 @@ export const env = {
   port,
   groqApiKey: process.env.GROQ_API_KEY ?? "",
   groqModel: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
-  /** Max tokens the model may generate (JSON posts). Tune via GROQ_MAX_COMPLETION_TOKENS. */
+  openRouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
+  openRouterModel: process.env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL,
   groqMaxCompletionTokens: clampInt(
     process.env.GROQ_MAX_COMPLETION_TOKENS,
     DEFAULT_GROQ_MAX_COMPLETION_TOKENS,
     256,
     32_768,
   ),
-  /** Transcript length sent to Groq after truncation. Tune via GROQ_MAX_TRANSCRIPT_CHARS. */
   groqMaxTranscriptChars: clampInt(
     process.env.GROQ_MAX_TRANSCRIPT_CHARS,
     DEFAULT_GROQ_MAX_TRANSCRIPT_CHARS,
     100,
     120_000,
+  ),
+  openRouterMaxCompletionTokens: clampInt(
+    process.env.OPENROUTER_MAX_COMPLETION_TOKENS,
+    DEFAULT_OPENROUTER_MAX_COMPLETION_TOKENS,
+    128,
+    8_192,
   ),
   nodeEnv: process.env.NODE_ENV ?? "development",
 } as const;
@@ -50,4 +54,11 @@ export function requireGroqKey(): string {
     throw new Error("GROQ_API_KEY is not set");
   }
   return env.groqApiKey;
+}
+
+export function requireOpenRouterKey(): string {
+  if (!env.openRouterApiKey) {
+    throw new Error("OPENROUTER_API_KEY is not set");
+  }
+  return env.openRouterApiKey;
 }
