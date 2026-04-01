@@ -60,7 +60,8 @@ function platformInstructions(platform: PlatformId): string {
 
 function buildSystemPrompt(
   platforms: PlatformId[],
-  extraInstructions?: string,
+  extraInstructions: string | undefined,
+  sourceWasSummarized: boolean,
 ): string {
   const platformDetails = platforms
     .map((p) => `- "${p}":\n${platformInstructions(p)}`)
@@ -70,9 +71,13 @@ function buildSystemPrompt(
     ? `\n\nAdditional global instructions:\n${extraInstructions.trim()}`
     : "";
 
+  const sourceIntro = sourceWasSummarized
+    ? "The source text has already been summarized from the transcript. Your job is to:"
+    : "The source text is the transcript (or excerpt) as provided—use it faithfully. Your job is to:";
+
   return `You are an expert content editor specializing in adapting long-form source material into high-performing platform-specific posts.
 
-    The source text has already been summarized from the transcript. Your job is to:
+    ${sourceIntro}
     - Extract the strongest ideas
     - Adapt tone, structure, and format per platform
     - Optimize for readability and engagement
@@ -139,6 +144,9 @@ export async function generatePostsFromTranscript(
   truncated: boolean;
   transcriptCharsUsed: number;
   notice?: string;
+  summary: string;
+  summaryModel: string;
+  summarized: boolean;
 }> {
   let truncated = false;
   let notice: string | undefined;
@@ -147,10 +155,24 @@ export async function generatePostsFromTranscript(
   if (body.length > maxChars) {
     body = body.slice(0, maxChars);
     truncated = true;
-    notice = `Transcript was truncated to ${maxChars.toLocaleString()} characters before summarization to stay within request limits.`;
+    notice = `Transcript was truncated to ${maxChars.toLocaleString()} characters before processing to stay within request limits.`;
   }
 
-  const { summary, model: summaryModel } = await summarizeTranscript(body);
+  const threshold = env.summarizeMinChars;
+  let sourceText: string;
+  let summaryModel: string;
+  let summarized: boolean;
+
+  if (body.length > threshold) {
+    const { summary, model } = await summarizeTranscript(body);
+    sourceText = summary;
+    summaryModel = model;
+    summarized = true;
+  } else {
+    sourceText = body;
+    summaryModel = "original";
+    summarized = false;
+  }
 
   const client = getClient();
   let completion;
@@ -160,9 +182,9 @@ export async function generatePostsFromTranscript(
       messages: [
         {
           role: "system",
-          content: buildSystemPrompt(platforms, extraInstructions),
+          content: buildSystemPrompt(platforms, extraInstructions, summarized),
         },
-        { role: "user", content: buildUserPrompt(summary) },
+        { role: "user", content: buildUserPrompt(sourceText) },
       ],
       temperature: 0.5,
       max_tokens: env.groqMaxCompletionTokens,
@@ -202,8 +224,9 @@ export async function generatePostsFromTranscript(
     posts,
     truncated,
     transcriptCharsUsed: body.length,
-    notice: notice
-      ? `${notice} The truncated transcript was summarized with OpenRouter (${summaryModel}) before Groq generated the posts.`
-      : `Transcript was summarized with OpenRouter (${summaryModel}) before Groq generated the posts.`,
+    notice,
+    summary: sourceText,
+    summaryModel,
+    summarized,
   };
 }

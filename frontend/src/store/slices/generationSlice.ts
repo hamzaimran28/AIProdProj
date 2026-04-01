@@ -33,7 +33,12 @@ export const generatePosts = createAsyncThunk<
     return rejectWithValue(data.error ?? "Generation failed");
   }
 
-  if (!data.posts) {
+  if (
+    !data.posts ||
+    typeof data.summary !== "string" ||
+    typeof data.summaryModel !== "string" ||
+    typeof data.summarized !== "boolean"
+  ) {
     return rejectWithValue("Invalid response from server");
   }
 
@@ -47,6 +52,9 @@ type GenerationState = {
   truncated: boolean;
   transcriptCharsUsed: number | null;
   notice: string | null;
+  summary: string | null;
+  summaryModel: string | null;
+  summarized: boolean;
 };
 
 const initialState: GenerationState = {
@@ -56,6 +64,9 @@ const initialState: GenerationState = {
   truncated: false,
   transcriptCharsUsed: null,
   notice: null,
+  summary: null,
+  summaryModel: null,
+  summarized: false,
 };
 
 export const generationSlice = createSlice({
@@ -80,6 +91,9 @@ export const generationSlice = createSlice({
         state.status = "loading";
         state.error = null;
         state.posts = null;
+        state.summary = null;
+        state.summaryModel = null;
+        state.summarized = false;
       })
       .addCase(generatePosts.fulfilled, (state, action) => {
         state.status = "succeeded";
@@ -87,6 +101,9 @@ export const generationSlice = createSlice({
         state.truncated = action.payload.truncated;
         state.transcriptCharsUsed = action.payload.transcriptCharsUsed;
         state.notice = action.payload.notice ?? null;
+        state.summary = action.payload.summary;
+        state.summaryModel = action.payload.summaryModel;
+        state.summarized = action.payload.summarized;
       })
       .addCase(generatePosts.rejected, (state, action) => {
         state.status = "failed";

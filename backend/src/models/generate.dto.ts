@@ -23,4 +23,7 @@ export type GenerateResponseDto = {
   truncated: boolean;
   transcriptCharsUsed: number;
   notice?: string;
+  summary: string;
+  summaryModel: string;
+  summarized: boolean;
 };

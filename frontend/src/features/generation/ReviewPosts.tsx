@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { updatePostContent } from "@/store/slices/generationSlice";
 import { PLATFORM_OPTIONS } from "@/shared/constants/platforms";
-import { IconReview } from "@/ui/icons";
+import { IconReview, IconTranscript } from "@/ui/icons";
 import { StepBadge } from "@/ui/StepBadge";
 import { useCopyFlash } from "@/ui/useCopyFlash";
 
@@ -17,7 +17,14 @@ export function ReviewPosts() {
   const [bulkFlash, setBulkFlash] = useState<"copy" | "export" | null>(null);
 
   const ready = generation.status === "succeeded" && generation.posts;
-  const { posts, truncated, notice, transcriptCharsUsed } = generation;
+  const {
+    posts,
+    truncated,
+    notice,
+    transcriptCharsUsed,
+    summary,
+    summarized,
+  } = generation;
 
   function copyAll() {
     if (!posts) return;
@@ -48,6 +55,11 @@ export function ReviewPosts() {
 
   function copyOne(platformId: string, body: string) {
     void navigator.clipboard.writeText(body).then(() => flash(platformId));
+  }
+
+  function copySummary() {
+    if (!summary) return;
+    void navigator.clipboard.writeText(summary).then(() => flash("__summary"));
   }
 
   return (
@@ -100,6 +112,46 @@ export function ReviewPosts() {
               {notice}
               {truncated && !notice && "Transcript was truncated on the server."}
             </div>
+          )}
+          {summary && (
+            <section
+              className="summary-card"
+              aria-labelledby="transcript-summary-heading"
+            >
+              <div className="summary-card-head">
+                <div className="summary-card-icon" aria-hidden>
+                  <IconTranscript className="summary-card-icon-svg" />
+                </div>
+                <div className="summary-card-head-text">
+                  <h3
+                    id="transcript-summary-heading"
+                    className="summary-card-title"
+                  >
+                    {summarized ? "Transcript summary" : "Source transcript"}
+                  </h3>
+                  <p className="summary-card-sub">
+                    {summarized
+                      ? "Condensed, then sent to Groq"
+                      : "Full transcript sent to Groq (below summarization length threshold)"}
+                  </p>
+                </div>
+                <div className="summary-card-actions">
+                  <span className="summary-pill">
+                    {summarized ? "Summarized" : "Original transcript"}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn small"
+                    onClick={copySummary}
+                  >
+                    {activeKey === "__summary" ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <div className="summary-card-body">
+                <p className="summary-card-text">{summary}</p>
+              </div>
+            </section>
           )}
           {transcriptCharsUsed != null && (
             <p className="hint">

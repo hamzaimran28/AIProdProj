@@ -9,6 +9,8 @@ const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
 const DEFAULT_GROQ_MAX_COMPLETION_TOKENS = 4096;
 const DEFAULT_GROQ_MAX_TRANSCRIPT_CHARS = 12_000;
 const DEFAULT_OPENROUTER_MAX_COMPLETION_TOKENS = 1200;
+/** Transcripts longer than this (chars) are summarized via OpenRouter; shorter use verbatim text. */
+const DEFAULT_SUMMARIZE_MIN_CHARS = 2500;
 
 function clampInt(
   raw: string | undefined,
@@ -45,6 +47,13 @@ export const env = {
     DEFAULT_OPENROUTER_MAX_COMPLETION_TOKENS,
     128,
     8_192,
+  ),
+  /** Summarize only when transcript length (after server truncation) exceeds this. */
+  summarizeMinChars: clampInt(
+    process.env.SUMMARIZE_MIN_CHARS,
+    DEFAULT_SUMMARIZE_MIN_CHARS,
+    100,
+    120_000,
   ),
   nodeEnv: process.env.NODE_ENV ?? "development",
 } as const;

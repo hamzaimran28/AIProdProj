@@ -23,6 +23,9 @@ export async function postGenerate(req: Request, res: Response): Promise<void> {
       truncated: result.truncated,
       transcriptCharsUsed: result.transcriptCharsUsed,
       notice: result.notice,
+      summary: result.summary,
+      summaryModel: result.summaryModel,
+      summarized: result.summarized,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Generation failed";
