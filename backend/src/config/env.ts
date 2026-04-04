@@ -9,6 +9,12 @@ const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
 const DEFAULT_GROQ_MAX_COMPLETION_TOKENS = 4096;
 const DEFAULT_GROQ_MAX_TRANSCRIPT_CHARS = 12_000;
 const DEFAULT_OPENROUTER_MAX_COMPLETION_TOKENS = 1200;
+/** Hugging Face Inference Router — FLUX.1-schnell (text-to-image). */
+export const HF_FLUX_SCHNELL_ROUTER_URL =
+  "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell";
+
+const DEFAULT_HF_NUM_INFERENCE_STEPS = 4;
+const DEFAULT_HF_GUIDANCE_SCALE = 0;
 
 function clampInt(
   raw: string | undefined,
@@ -46,6 +52,21 @@ export const env = {
     128,
     8_192,
   ),
+  huggingfaceApiToken: process.env.HUGGINGFACE_API_TOKEN ?? "",
+  huggingfaceImageApiUrl:
+    process.env.HUGGINGFACE_IMAGE_API_URL?.trim() || HF_FLUX_SCHNELL_ROUTER_URL,
+  huggingfaceImageNumInferenceSteps: clampInt(
+    process.env.HUGGINGFACE_IMAGE_NUM_INFERENCE_STEPS,
+    DEFAULT_HF_NUM_INFERENCE_STEPS,
+    1,
+    50,
+  ),
+  huggingfaceImageGuidanceScale: (() => {
+    const raw = process.env.HUGGINGFACE_IMAGE_GUIDANCE_SCALE;
+    if (raw === undefined || raw.trim() === "") return DEFAULT_HF_GUIDANCE_SCALE;
+    const n = Number.parseFloat(raw);
+    return Number.isFinite(n) ? Math.min(20, Math.max(0, n)) : DEFAULT_HF_GUIDANCE_SCALE;
+  })(),
   nodeEnv: process.env.NODE_ENV ?? "development",
 } as const;
 
@@ -61,4 +82,11 @@ export function requireOpenRouterKey(): string {
     throw new Error("OPENROUTER_API_KEY is not set");
   }
   return env.openRouterApiKey;
+}
+
+export function requireHuggingfaceToken(): string {
+  if (!env.huggingfaceApiToken) {
+    throw new Error("HUGGINGFACE_API_TOKEN is not set");
+  }
+  return env.huggingfaceApiToken;
 }

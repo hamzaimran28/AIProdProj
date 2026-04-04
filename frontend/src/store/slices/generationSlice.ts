@@ -3,10 +3,15 @@ import {
   createAsyncThunk,
   type PayloadAction,
 } from "@reduxjs/toolkit";
-import type { GenerateResponse } from "@/shared/types/api";
+import type { GenerateResponse, SharedGeneratedImage } from "@/shared/types/api";
 
 type ThunkState = {
-  transcript: { text: string; extraInstructions: string };
+  transcript: {
+    text: string;
+    extraInstructions: string;
+    includeImage: boolean;
+    imagePrompt: string;
+  };
   platforms: { selectedIds: string[] };
 };
 
@@ -20,6 +25,14 @@ export const generatePosts = createAsyncThunk<
     transcript: transcript.text,
     platforms: platforms.selectedIds,
     extraInstructions: transcript.extraInstructions.trim() || undefined,
+    ...(transcript.includeImage
+      ? {
+          includeImage: true as const,
+          ...(transcript.imagePrompt.trim()
+            ? { imagePrompt: transcript.imagePrompt.trim() }
+            : {}),
+        }
+      : {}),
   };
 
   const res = await fetch("/api/generate", {
@@ -47,6 +60,8 @@ type GenerationState = {
   truncated: boolean;
   transcriptCharsUsed: number | null;
   notice: string | null;
+  sharedImage: SharedGeneratedImage | null;
+  imageError: string | null;
 };
 
 const initialState: GenerationState = {
@@ -56,6 +71,8 @@ const initialState: GenerationState = {
   truncated: false,
   transcriptCharsUsed: null,
   notice: null,
+  sharedImage: null,
+  imageError: null,
 };
 
 export const generationSlice = createSlice({
@@ -80,6 +97,8 @@ export const generationSlice = createSlice({
         state.status = "loading";
         state.error = null;
         state.posts = null;
+        state.sharedImage = null;
+        state.imageError = null;
       })
       .addCase(generatePosts.fulfilled, (state, action) => {
         state.status = "succeeded";
@@ -87,6 +106,8 @@ export const generationSlice = createSlice({
         state.truncated = action.payload.truncated;
         state.transcriptCharsUsed = action.payload.transcriptCharsUsed;
         state.notice = action.payload.notice ?? null;
+        state.sharedImage = action.payload.sharedImage ?? null;
+        state.imageError = action.payload.imageError ?? null;
       })
       .addCase(generatePosts.rejected, (state, action) => {
         state.status = "failed";

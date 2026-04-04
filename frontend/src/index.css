@@ -843,6 +843,93 @@ body {
   line-height: 1.45;
 }
 
+.generate-image-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin: 0 0 0.85rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.generate-image-option input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.generate-image-prompt {
+  margin-bottom: 1rem;
+}
+
+.generate-image-hint {
+  margin: 0.45rem 0 0;
+}
+
+.shared-image-card {
+  margin: 1rem 0 1.25rem;
+  padding: 1rem 1rem 1.1rem;
+  background: linear-gradient(165deg, rgba(14, 14, 20, 0.95), var(--bg-elevated));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+}
+
+.shared-image-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.shared-image-card-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.shared-image-card-lead {
+  margin: 0 0 0.75rem;
+}
+
+.shared-image-error {
+  text-align: left;
+  margin: 0 0 0.5rem;
+}
+
+.shared-image-preview {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.shared-image-preview img {
+  display: block;
+  width: 100%;
+  max-width: min(100%, 560px);
+  height: auto;
+  vertical-align: middle;
+}
+
+.shared-image-prompt-used {
+  margin: 0.65rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.shared-image-prompt-label {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
 .post-card {
   --post-accent: var(--accent);
 

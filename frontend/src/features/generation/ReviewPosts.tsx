@@ -13,11 +13,21 @@ function labelFor(id: string): string {
 export function ReviewPosts() {
   const dispatch = useAppDispatch();
   const generation = useAppSelector((s) => s.generation);
+  const wantedImage = useAppSelector((s) => s.transcript.includeImage);
   const { activeKey, flash } = useCopyFlash();
-  const [bulkFlash, setBulkFlash] = useState<"copy" | "export" | null>(null);
+  const [bulkFlash, setBulkFlash] = useState<"copy" | "export" | "img" | null>(
+    null,
+  );
 
   const ready = generation.status === "succeeded" && generation.posts;
-  const { posts, truncated, notice, transcriptCharsUsed } = generation;
+  const {
+    posts,
+    truncated,
+    notice,
+    transcriptCharsUsed,
+    sharedImage,
+    imageError,
+  } = generation;
 
   function copyAll() {
     if (!posts) return;
@@ -28,6 +38,29 @@ export function ReviewPosts() {
       setBulkFlash("copy");
       window.setTimeout(() => setBulkFlash(null), 1800);
     });
+  }
+
+  function downloadSharedImage() {
+    if (!sharedImage) return;
+    const bin = atob(sharedImage.base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) {
+      bytes[i] = bin.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: sharedImage.mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const ext = sharedImage.mimeType.includes("png")
+      ? "png"
+      : sharedImage.mimeType.includes("jpeg")
+        ? "jpg"
+        : "img";
+    a.download = `shared-post-image.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setBulkFlash("img");
+    window.setTimeout(() => setBulkFlash(null), 1800);
   }
 
   function exportFile() {
@@ -76,7 +109,9 @@ export function ReviewPosts() {
                 <div className="review-skeleton-line review-skeleton-line--short" />
                 <div className="review-skeleton-line review-skeleton-line--mid" />
               </div>
-              <p className="review-placeholder-text">Generating drafts…</p>
+              <p className="review-placeholder-text">
+                {wantedImage ? "Generating drafts and image…" : "Generating drafts…"}
+              </p>
             </>
           )}
           {generation.status === "idle" && (
@@ -114,6 +149,46 @@ export function ReviewPosts() {
               {bulkFlash === "export" ? "Downloaded" : "Export .txt"}
             </button>
           </div>
+          {(sharedImage || imageError) && (
+            <div className="shared-image-card">
+              <div className="shared-image-card-head">
+                <h3 className="shared-image-card-title">Shared image</h3>
+                {sharedImage && (
+                  <button
+                    type="button"
+                    className="btn small"
+                    onClick={downloadSharedImage}
+                  >
+                    {bulkFlash === "img" ? "Saved" : "Download image"}
+                  </button>
+                )}
+              </div>
+              <p className="hint shared-image-card-lead">
+                Same asset for every platform below—attach it when you publish
+                each post.
+              </p>
+              {imageError && (
+                <p className="review-placeholder-text review-placeholder-text--warn shared-image-error">
+                  {imageError}
+                </p>
+              )}
+              {sharedImage && (
+                <>
+                  <figure className="shared-image-preview">
+                    <img
+                      src={`data:${sharedImage.mimeType};base64,${sharedImage.base64}`}
+                      alt="Generated illustration for your posts"
+                      loading="lazy"
+                    />
+                  </figure>
+                  <p className="hint shared-image-prompt-used">
+                    <span className="shared-image-prompt-label">Prompt used:</span>{" "}
+                    {sharedImage.promptUsed}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           {Object.entries(posts).map(([platformId, body]) => (
             <div
               key={platformId}
