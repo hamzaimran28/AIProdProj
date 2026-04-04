@@ -46,7 +46,12 @@ export const generatePosts = createAsyncThunk<
     return rejectWithValue(data.error ?? "Generation failed");
   }
 
-  if (!data.posts) {
+  if (
+    !data.posts ||
+    typeof data.summary !== "string" ||
+    typeof data.summaryModel !== "string" ||
+    typeof data.summarized !== "boolean"
+  ) {
     return rejectWithValue("Invalid response from server");
   }
 
@@ -60,6 +65,9 @@ type GenerationState = {
   truncated: boolean;
   transcriptCharsUsed: number | null;
   notice: string | null;
+  summary: string | null;
+  summaryModel: string | null;
+  summarized: boolean;
   sharedImage: SharedGeneratedImage | null;
   imageError: string | null;
 };
@@ -71,6 +79,9 @@ const initialState: GenerationState = {
   truncated: false,
   transcriptCharsUsed: null,
   notice: null,
+  summary: null,
+  summaryModel: null,
+  summarized: false,
   sharedImage: null,
   imageError: null,
 };
@@ -97,6 +108,9 @@ export const generationSlice = createSlice({
         state.status = "loading";
         state.error = null;
         state.posts = null;
+        state.summary = null;
+        state.summaryModel = null;
+        state.summarized = false;
         state.sharedImage = null;
         state.imageError = null;
       })
@@ -106,6 +120,9 @@ export const generationSlice = createSlice({
         state.truncated = action.payload.truncated;
         state.transcriptCharsUsed = action.payload.transcriptCharsUsed;
         state.notice = action.payload.notice ?? null;
+        state.summary = action.payload.summary;
+        state.summaryModel = action.payload.summaryModel;
+        state.summarized = action.payload.summarized;
         state.sharedImage = action.payload.sharedImage ?? null;
         state.imageError = action.payload.imageError ?? null;
       })

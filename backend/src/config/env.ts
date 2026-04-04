@@ -15,6 +15,23 @@ export const HF_FLUX_SCHNELL_ROUTER_URL =
 
 const DEFAULT_HF_NUM_INFERENCE_STEPS = 4;
 const DEFAULT_HF_GUIDANCE_SCALE = 0;
+/** Transcripts longer than this (chars) are summarized via OpenRouter; shorter use verbatim text. */
+const DEFAULT_SUMMARIZE_MIN_CHARS = 2500;
+
+/** Trim .env value, strip accidental quotes, fix common hf_ / yhf_ typo. */
+function normalizeHuggingFaceToken(raw: string): string {
+  let t = raw.trim();
+  if (
+    (t.startsWith('"') && t.endsWith('"')) ||
+    (t.startsWith("'") && t.endsWith("'"))
+  ) {
+    t = t.slice(1, -1).trim();
+  }
+  if (t.startsWith("yhf_")) {
+    t = `hf_${t.slice(4)}`;
+  }
+  return t;
+}
 
 function clampInt(
   raw: string | undefined,
@@ -52,7 +69,9 @@ export const env = {
     128,
     8_192,
   ),
-  huggingfaceApiToken: process.env.HUGGINGFACE_API_TOKEN ?? "",
+  huggingfaceApiToken: normalizeHuggingFaceToken(
+    process.env.HUGGINGFACE_API_TOKEN ?? "",
+  ),
   huggingfaceImageApiUrl:
     process.env.HUGGINGFACE_IMAGE_API_URL?.trim() || HF_FLUX_SCHNELL_ROUTER_URL,
   huggingfaceImageNumInferenceSteps: clampInt(
@@ -67,6 +86,13 @@ export const env = {
     const n = Number.parseFloat(raw);
     return Number.isFinite(n) ? Math.min(20, Math.max(0, n)) : DEFAULT_HF_GUIDANCE_SCALE;
   })(),
+  /** Summarize only when transcript length (after server truncation) exceeds this. */
+  summarizeMinChars: clampInt(
+    process.env.SUMMARIZE_MIN_CHARS,
+    DEFAULT_SUMMARIZE_MIN_CHARS,
+    100,
+    120_000,
+  ),
   nodeEnv: process.env.NODE_ENV ?? "development",
 } as const;
 

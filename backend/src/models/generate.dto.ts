@@ -33,6 +33,9 @@ export type GenerateResponseDto = {
   truncated: boolean;
   transcriptCharsUsed: number;
   notice?: string;
+  summary: string;
+  summaryModel: string;
+  summarized: boolean;
   /** Single image for the whole batch; reuse this same payload for every platform in the UI. */
   sharedImage?: SharedGeneratedImageDto;
   imageError?: string;

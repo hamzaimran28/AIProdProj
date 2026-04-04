@@ -9,6 +9,9 @@ export type GenerateResponse = {
   truncated: boolean;
   transcriptCharsUsed: number;
   notice?: string;
+  summary: string;
+  summaryModel: string;
+  summarized: boolean;
   sharedImage?: SharedGeneratedImage;
   imageError?: string;
 };

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { updatePostContent } from "@/store/slices/generationSlice";
 import { PLATFORM_OPTIONS } from "@/shared/constants/platforms";
-import { IconReview } from "@/ui/icons";
+import { IconReview, IconTranscript } from "@/ui/icons";
 import { StepBadge } from "@/ui/StepBadge";
 import { useCopyFlash } from "@/ui/useCopyFlash";
 
@@ -27,6 +27,8 @@ export function ReviewPosts() {
     transcriptCharsUsed,
     sharedImage,
     imageError,
+    summary,
+    summarized,
   } = generation;
 
   function copyAll() {
@@ -83,6 +85,11 @@ export function ReviewPosts() {
     void navigator.clipboard.writeText(body).then(() => flash(platformId));
   }
 
+  function copySummary() {
+    if (!summary) return;
+    void navigator.clipboard.writeText(summary).then(() => flash("__summary"));
+  }
+
   return (
     <section
       className="panel panel-review"
@@ -135,6 +142,46 @@ export function ReviewPosts() {
               {notice}
               {truncated && !notice && "Transcript was truncated on the server."}
             </div>
+          )}
+          {summary && (
+            <section
+              className="summary-card"
+              aria-labelledby="transcript-summary-heading"
+            >
+              <div className="summary-card-head">
+                <div className="summary-card-icon" aria-hidden>
+                  <IconTranscript className="summary-card-icon-svg" />
+                </div>
+                <div className="summary-card-head-text">
+                  <h3
+                    id="transcript-summary-heading"
+                    className="summary-card-title"
+                  >
+                    {summarized ? "Transcript summary" : "Source transcript"}
+                  </h3>
+                  <p className="summary-card-sub">
+                    {summarized
+                      ? "Condensed, then sent to Groq"
+                      : "Full transcript sent to Groq (below summarization length threshold)"}
+                  </p>
+                </div>
+                <div className="summary-card-actions">
+                  <span className="summary-pill">
+                    {summarized ? "Summarized" : "Original transcript"}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn small"
+                    onClick={copySummary}
+                  >
+                    {activeKey === "__summary" ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <div className="summary-card-body">
+                <p className="summary-card-text">{summary}</p>
+              </div>
+            </section>
           )}
           {transcriptCharsUsed != null && (
             <p className="hint">
