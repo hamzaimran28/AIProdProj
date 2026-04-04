@@ -31,22 +31,25 @@ function messageContentToString(content: unknown): string {
   return "";
 }
 
-/** Matches the structured summary format from openrouter.service summarizer. */
-const EDITORIAL_OUTLINE_LABEL =
-  /\b(?:Core thesis|Key points|Notable examples or stories|Hook ideas|CTA or closing angle)\b\s*:?/gi;
-
-function stripEditorialOutlineLabels(text: string): string {
-  return text
-    .replace(EDITORIAL_OUTLINE_LABEL, " ")
-    .replace(/\s+/g, " ")
-    .replace(/["'`]/g, "")
-    .trim();
-}
-
 function looksLikeEditorialOutlinePrompt(s: string): boolean {
   // Non-global regex: global .test() mutates lastIndex and breaks repeat checks.
   return /\b(?:Core thesis|Key points|Notable examples or stories|Hook ideas|CTA or closing angle)\b/i.test(
     s,
+  );
+}
+
+/** Groq sometimes echoes host / transcript wording instead of a visual scene. */
+function looksLikeSpokenScriptOrTranscriptProse(s: string): boolean {
+  const lower = s.toLowerCase();
+  return (
+    /welcome back|to the channel|today we('re| are)|we are talking|talking about why|hit record|everything that\b/i.test(
+      lower,
+    ) ||
+    /don'?t forget to|like and subscribe|smash that|leave a comment below/i.test(
+      lower,
+    ) ||
+    (lower.length > 60 &&
+      /\b(the hardest part|being a creator|not hitting)\b/i.test(lower))
   );
 }
 
@@ -56,13 +59,13 @@ function repairDanglingImagePromptDescription(main: string): string {
   if (t.length < 8) return t;
 
   if (/\bsits\s+at$/i.test(t)) {
-    return `${t} a wide desk with curved monitors showing timelines, headphones nearby, warm key light and cool screen glow`;
+    return `${t} a desk with glowing monitors, warm lamp, moody shadows`;
   }
   if (/\bstands\s+at$/i.test(t) || /\bwaiting\s+at$/i.test(t)) {
-    return `${t} a professional workstation with soft practical lighting`;
+    return `${t} a simple workstation, soft side light`;
   }
   if (/\bat$/i.test(t)) {
-    return `${t} a detailed editing workstation, monitors and waveforms, moody fill light`;
+    return `${t} a desk and screens, low-key lighting`;
   }
   if (/\bwith$/i.test(t)) {
     return `${t} soft rim light and shallow depth of field`;
@@ -91,17 +94,32 @@ function truncatePromptAtClauseBoundary(main: string, maxLen: number): string {
   return slice.trim();
 }
 
-function fallbackImagePromptFromSummary(summary: string): string {
-  const narrative = stripEditorialOutlineLabels(summary)
-    .replace(/^[\s.,;:]+|[\s.,;:]+$/g, "")
-    .slice(0, 420);
-  const suffix =
-    ", single coherent scene, polished digital illustration, soft cinematic lighting, no text in image";
-  if (narrative.length < 24) {
-    return "A creator at a desk late at night, multiple glowing monitors with timelines and waveforms, coffee mug, organized creative chaos, moody teal and amber light, editorial illustration, no text";
-  }
-  const base = narrative.slice(0, Math.min(narrative.length, 320));
-  return `${base}${suffix}`;
+const IMAGE_PROMPT_STYLE_SUFFIX = ", digital illustration, soft light, no text";
+/** Scene description budget before the short style suffix (keep total prompt compact for FLUX). */
+const IMAGE_PROMPT_MAX_SCENE_CHARS = 140;
+
+const GENERIC_FLUX_SCENE_FALLBACK =
+  "Tired creator at a desk at night, monitor glow, coffee steam, warm lamp, moody shadows";
+
+function genericFluxImagePromptFallback(): string {
+  return `${GENERIC_FLUX_SCENE_FALLBACK}${IMAGE_PROMPT_STYLE_SUFFIX}`;
+}
+
+/** Turn Groq's imagePrompt field into a FLUX-ready string, or null if unusable. */
+function finalizeImageSceneFromGroq(raw: string): string | null {
+  let s = raw.replace(/\s+/g, " ").trim().replace(/^["']|["']$/g, "").trim();
+  if (s.length < 12) return null;
+  if (looksLikeEditorialOutlinePrompt(s)) return null;
+  if (looksLikeSpokenScriptOrTranscriptProse(s)) return null;
+
+  s = repairDanglingImagePromptDescription(s);
+  s = truncatePromptAtClauseBoundary(s, IMAGE_PROMPT_MAX_SCENE_CHARS);
+  s = repairDanglingImagePromptDescription(s);
+  s = truncatePromptAtClauseBoundary(s, IMAGE_PROMPT_MAX_SCENE_CHARS);
+
+  const line = s.trim();
+  if (line.length < 12) return null;
+  return `${line}${IMAGE_PROMPT_STYLE_SUFFIX}`.slice(0, 400);
 }
 
 function platformInstructions(platform: PlatformId): string {
@@ -150,10 +168,14 @@ function platformInstructions(platform: PlatformId): string {
   }
 }
 
+/** Extra JSON field when generating a shared image alongside posts. */
+const GROQ_JSON_IMAGE_PROMPT_KEY = "imagePrompt";
+
 function buildSystemPrompt(
   platforms: PlatformId[],
   extraInstructions: string | undefined,
   sourceWasSummarized: boolean,
+  emitImagePrompt: boolean,
 ): string {
   const platformDetails = platforms
     .map((p) => `- "${p}":\n${platformInstructions(p)}`)
@@ -166,6 +188,20 @@ function buildSystemPrompt(
   const sourceIntro = sourceWasSummarized
     ? "The source text has already been summarized from the transcript. Your job is to:"
     : "The source text is the transcript (or excerpt) as provided—use it faithfully. Your job is to:";
+
+  const jsonKeys = emitImagePrompt
+    ? JSON.stringify([...platforms, GROQ_JSON_IMAGE_PROMPT_KEY])
+    : JSON.stringify(platforms);
+
+  const imageBlock = emitImagePrompt
+    ? `
+
+    IMAGE PROMPT (same JSON response):
+    11. Include key "${GROQ_JSON_IMAGE_PROMPT_KEY}" (exact spelling) with ONE short string for a text-to-image model.
+    12. "${GROQ_JSON_IMAGE_PROMPT_KEY}" must describe ONLY a visual scene (who/where/light/mood)—NOT spoken dialogue, NOT quotes from the transcript, NOT "welcome back" or host intros, NOT social platform names, NOT listing multiple monitors with different apps.
+    13. Keep that string under ~140 characters of pure visual description (no style tags; style is added later).
+    14. End on a complete phrase (not "at", "with", "and"). No readable text or logos in the imagined image.`
+    : "";
 
   return `You are an expert content editor specializing in adapting long-form source material into high-performing platform-specific posts.
 
@@ -181,7 +217,7 @@ function buildSystemPrompt(
 
     STRICT OUTPUT RULES:
     1. Output MUST be valid JSON.
-    2. Use ONLY these keys: ${JSON.stringify(platforms)}.
+    2. Use ONLY these keys: ${jsonKeys}.
     3. Each value MUST be a single string.
     4. Use "\\n" for line breaks inside strings.
     5. Do NOT include markdown, explanations, or code fences.
@@ -189,7 +225,7 @@ function buildSystemPrompt(
     7. Do NOT hallucinate or invent facts.
     8. Ensure content is native to each platform (NOT copy-pasted across).
     9. Ensure hooks are optimized for truncation behavior on each platform.
-    10. Output must be directly parsable by JSON.parse().`;
+    10. Output must be directly parsable by JSON.parse().${imageBlock}`;
 }
 
 function buildUserPrompt(sourceText: string): string {
@@ -211,6 +247,7 @@ async function runGroqPostGeneration(
   platforms: PlatformId[],
   extraInstructions: string | undefined,
   sourceWasSummarized: boolean,
+  emitImagePrompt: boolean,
 ): Promise<string> {
   const client = getClient();
   try {
@@ -223,6 +260,7 @@ async function runGroqPostGeneration(
             platforms,
             extraInstructions,
             sourceWasSummarized,
+            emitImagePrompt,
           ),
         },
         { role: "user", content: buildUserPrompt(sourceText) },
@@ -245,81 +283,6 @@ async function runGroqPostGeneration(
   }
 }
 
-async function deriveImagePromptFromSummary(summary: string): Promise<string> {
-  const client = getClient();
-  const strippedForModel = stripEditorialOutlineLabels(summary).slice(0, 6000);
-  const userBlock = summary.trim().slice(0, 8000);
-
-  async function requestImagePrompt(
-    system: string,
-    userContent: string,
-  ): Promise<string> {
-    const completion = await client.chat.completions.create({
-      model: env.groqModel,
-      messages: [
-        { role: "system", content: system },
-        {
-          role: "user",
-          content: userContent,
-        },
-      ],
-      temperature: 0.5,
-      max_tokens: 400,
-    });
-    const choice = completion.choices[0];
-    const text = messageContentToString(choice?.message?.content).trim();
-    return text;
-  }
-
-  const systemPrimary = `You write ONE English line for the FLUX text-to-image model.
-
-Output rules:
-- One line only, max 400 characters, no quotes around it.
-- Finish with a complete phrase (do not end with dangling words like "at", "with", "and", or "the").
-- Describe a single visible scene: concrete subjects, setting, mood, lighting, palette, composition.
-- Do NOT output section titles, labels, or marketing jargon (never write: Core thesis, Key points, Hook, CTA, bullet lists, colons before abstract nouns).
-- Do NOT restate the outline structure of the notes—only invent imagery that symbolizes the ideas.
-- If the topic is abstract (workflows, software, productivity), show a metaphorical real-world scene (e.g. creator at workstation, studio, timelines on screens)—not words about "challenges" or "burden" as labels.
-- No readable text, logos, or subtitles in the scene description.`;
-
-  const userPrimary = `The notes below use editorial section headings—ignore the heading words; use only the substance to invent one strong image.
-
-Notes:
-${userBlock}`;
-
-  const systemRepair = `You failed before if you repeated outline headings. Output ONE line only: a FLUX image prompt (max 400 chars)—pure visual scene, zero section titles or words like thesis, hook, CTA, key points. End with a complete phrase, not a dangling preposition.`;
-
-  let raw = await requestImagePrompt(systemPrimary, userPrimary);
-  if (!raw || looksLikeEditorialOutlinePrompt(raw)) {
-    raw = await requestImagePrompt(
-      systemRepair,
-      `Ideas only (no headers to copy):\n${strippedForModel || userBlock}`,
-    );
-  }
-  if (!raw) {
-    return fallbackImagePromptFromSummary(summary);
-  }
-
-  let oneLine = raw.replace(/\s+/g, " ").trim();
-  if (looksLikeEditorialOutlinePrompt(oneLine)) {
-    oneLine = stripEditorialOutlineLabels(oneLine).replace(/\s+/g, " ").trim();
-  }
-  if (oneLine.length < 16 || looksLikeEditorialOutlinePrompt(oneLine)) {
-    return fallbackImagePromptFromSummary(summary);
-  }
-
-  oneLine = repairDanglingImagePromptDescription(oneLine);
-
-  const style =
-    ", polished digital illustration, soft cinematic lighting, no text in image";
-  const maxTotal = 520;
-  const maxMain = Math.max(80, maxTotal - style.length);
-  oneLine = truncatePromptAtClauseBoundary(oneLine, maxMain);
-  oneLine = repairDanglingImagePromptDescription(oneLine);
-
-  return `${oneLine}${style}`.slice(0, 2000);
-}
-
 function extractJsonObject(text: string): Record<string, string> {
   const trimmed = text.trim();
   const start = trimmed.indexOf("{");
@@ -339,6 +302,22 @@ function extractJsonObject(text: string): Record<string, string> {
     }
   }
   return out;
+}
+
+function parsePostsJsonWithOptionalImage(
+  text: string,
+  platforms: PlatformId[],
+): { posts: Record<string, string>; imagePromptRaw?: string } {
+  const all = extractJsonObject(text);
+  const imageRaw = all[GROQ_JSON_IMAGE_PROMPT_KEY]?.trim();
+  const posts: Record<string, string> = {};
+  for (const p of platforms) {
+    const v = all[p];
+    if (typeof v === "string") {
+      posts[p] = v;
+    }
+  }
+  return { posts, imagePromptRaw: imageRaw };
 }
 
 export async function generatePostsFromTranscript(
@@ -386,32 +365,24 @@ export async function generatePostsFromTranscript(
   const includeImage = options?.includeImage === true;
   const presetImagePrompt = options?.imagePrompt?.trim();
 
-  let imagePromptDerivationError: string | undefined;
-  const [raw, resolvedImagePrompt] = await Promise.all([
-    runGroqPostGeneration(
-      sourceText,
-      platforms,
-      extraInstructions,
-      summarized,
-    ),
-    includeImage
-      ? presetImagePrompt
-        ? Promise.resolve(presetImagePrompt)
-        : deriveImagePromptFromSummary(sourceText).catch((e) => {
-            imagePromptDerivationError =
-              e instanceof Error ? e.message : String(e);
-            return null;
-          })
-      : Promise.resolve(null as string | null),
-  ]);
+  const raw = await runGroqPostGeneration(
+    sourceText,
+    platforms,
+    extraInstructions,
+    summarized,
+    includeImage && !presetImagePrompt,
+  );
 
   if (!raw) {
     throw new Error("Empty response from Groq");
   }
 
   let posts: Record<string, string>;
+  let imagePromptRaw: string | undefined;
   try {
-    posts = extractJsonObject(raw);
+    const parsed = parsePostsJsonWithOptionalImage(raw, platforms);
+    posts = parsed.posts;
+    imagePromptRaw = parsed.imagePromptRaw;
   } catch {
     throw new Error("Invalid JSON from model. Please try again.");
   }
@@ -422,27 +393,35 @@ export async function generatePostsFromTranscript(
     }
   }
 
+  let resolvedImagePrompt: string | null = null;
+  if (includeImage) {
+    if (presetImagePrompt) {
+      resolvedImagePrompt = presetImagePrompt;
+    } else {
+      const fromGroq =
+        imagePromptRaw != null && imagePromptRaw.length > 0
+          ? finalizeImageSceneFromGroq(imagePromptRaw)
+          : null;
+      resolvedImagePrompt =
+        fromGroq ?? (includeImage ? genericFluxImagePromptFallback() : null);
+    }
+  }
+
   let sharedImage:
     | { mimeType: string; base64: string; promptUsed: string }
     | undefined;
   let imageError: string | undefined;
-  if (includeImage) {
-    if (!resolvedImagePrompt) {
-      imageError =
-        imagePromptDerivationError ??
-        "Could not build an image prompt. Add a custom image prompt or try again.";
-    } else {
-      try {
-        const { buffer, mimeType } =
-          await generateImageFromPrompt(resolvedImagePrompt);
-        sharedImage = {
-          mimeType,
-          base64: buffer.toString("base64"),
-          promptUsed: resolvedImagePrompt,
-        };
-      } catch (e) {
-        imageError = e instanceof Error ? e.message : String(e);
-      }
+  if (includeImage && resolvedImagePrompt) {
+    try {
+      const { buffer, mimeType } =
+        await generateImageFromPrompt(resolvedImagePrompt);
+      sharedImage = {
+        mimeType,
+        base64: buffer.toString("base64"),
+        promptUsed: resolvedImagePrompt,
+      };
+    } catch (e) {
+      imageError = e instanceof Error ? e.message : String(e);
     }
   }
 
